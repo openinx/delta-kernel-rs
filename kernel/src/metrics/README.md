@@ -23,6 +23,10 @@ Success and failure are two variants of one event. Emit the success span, then f
 (`#[instrument(err)]` does this on `Err`; an emit helper calls `tracing::info!(error = ...)`). The
 layer sees `error` and flips the event via `MetricEvent::into_failure`.
 
+Snapshot-build failures receive elapsed time when the lifecycle span closes. Log-segment and
+protocol/metadata failures preserve the operation duration passed to their emit helper; timing the
+helper span itself would omit the failed work.
+
 ## Adding an event
 
 1. Define the struct + `SPAN_NAME` in `events.rs`; add a `MetricEvent` variant and its

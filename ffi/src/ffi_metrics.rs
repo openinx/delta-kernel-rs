@@ -161,6 +161,8 @@ pub struct LogSegmentLoadFailure {
     pub correlation_id: KernelStringSlice,
     pub table_type: TableType,
     pub load_type: LogSegmentLoadType,
+    /// Elapsed wall-clock time before failure, in nanoseconds.
+    pub duration_ns: u64,
 }
 
 /// How a snapshot load resolved Protocol and Metadata.
@@ -205,6 +207,8 @@ pub struct ProtocolMetadataLoadFailure {
     pub correlation_id: KernelStringSlice,
     pub table_type: TableType,
     pub load_type: LogSegmentLoadType,
+    /// Elapsed wall-clock time before failure, in nanoseconds.
+    pub duration_ns: u64,
 }
 
 /// A snapshot was built successfully.
@@ -225,6 +229,8 @@ pub struct SnapshotBuildFailure {
     pub correlation_id: KernelStringSlice,
     pub table_type: TableType,
     pub load_type: SnapshotLoadType,
+    /// Elapsed wall-clock time before failure, in nanoseconds.
+    pub duration_ns: u64,
 }
 
 /// A transaction was committed successfully. `operation` and `correlation_id` are slices into
@@ -414,11 +420,13 @@ impl MetricEvent {
                 correlation_id,
                 table_type,
                 load_type,
+                duration,
             }) => Self::LogSegmentLoadFailure(LogSegmentLoadFailure {
                 operation_id: (*operation_id).into(),
                 correlation_id: correlation_id_slice(correlation_id.as_deref()),
                 table_type: (*table_type).into(),
                 load_type: (*load_type).into(),
+                duration_ns: ns(*duration),
             }),
             K::ProtocolMetadataLoadSuccess(kernel::ProtocolMetadataLoadSuccess {
                 operation_id,
@@ -440,11 +448,13 @@ impl MetricEvent {
                 correlation_id,
                 table_type,
                 load_type,
+                duration,
             }) => Self::ProtocolMetadataLoadFailure(ProtocolMetadataLoadFailure {
                 operation_id: (*operation_id).into(),
                 correlation_id: correlation_id_slice(correlation_id.as_deref()),
                 table_type: (*table_type).into(),
                 load_type: (*load_type).into(),
+                duration_ns: ns(*duration),
             }),
             K::SnapshotBuildSuccess(kernel::SnapshotBuildSuccess {
                 operation_id,
@@ -466,11 +476,13 @@ impl MetricEvent {
                 correlation_id,
                 table_type,
                 load_type,
+                duration,
             }) => Self::SnapshotBuildFailure(SnapshotBuildFailure {
                 operation_id: (*operation_id).into(),
                 correlation_id: correlation_id_slice(correlation_id.as_deref()),
                 table_type: (*table_type).into(),
                 load_type: (*load_type).into(),
+                duration_ns: ns(*duration),
             }),
             K::TransactionCommitSuccess(kernel::TransactionCommitSuccess {
                 operation_id,
@@ -870,20 +882,58 @@ mod tests {
         });
     }
 
-    #[test]
-    fn from_kernel_snapshot_hint_failure_maps_to_appended_ffi_variant() {
-        let event = kernel::MetricEvent::SnapshotBuildFailure(kernel::SnapshotBuildFailure {
-            operation_id: kernel::MetricId::new(),
-            correlation_id: None,
-            table_type: kernel::TableType::PathBased,
-            load_type: kernel::SnapshotLoadType::SnapshotHint,
-        });
-        with_ffi_event(&event, |ffi| {
-            let MetricEvent::SnapshotBuildFailure(e) = ffi else {
-                panic!("expected SnapshotBuildFailure");
-            };
-            assert_eq!(e.load_type, SnapshotLoadType::SnapshotHint);
-        });
+    #[rstest]
+    fn from_kernel_snapshot_lifecycle_failures_preserve_duration(
+        #[values(0u64, 53, u64::MAX)] duration_ns: u64,
+    ) {
+        let id = kernel::MetricId::new();
+        let duration = Duration::from_nanos(duration_ns);
+        let events = [
+            kernel::MetricEvent::SnapshotBuildFailure(kernel::SnapshotBuildFailure {
+                operation_id: id,
+                correlation_id: None,
+                table_type: kernel::TableType::PathBased,
+                load_type: kernel::SnapshotLoadType::SnapshotHint,
+                duration,
+            }),
+            kernel::MetricEvent::LogSegmentLoadFailure(kernel::LogSegmentLoadFailure {
+                operation_id: id,
+                correlation_id: None,
+                table_type: kernel::TableType::PathBased,
+                load_type: kernel::LogSegmentLoadType::Full,
+                duration,
+            }),
+            kernel::MetricEvent::ProtocolMetadataLoadFailure(kernel::ProtocolMetadataLoadFailure {
+                operation_id: id,
+                correlation_id: None,
+                table_type: kernel::TableType::PathBased,
+                load_type: kernel::LogSegmentLoadType::Full,
+                duration,
+            }),
+        ];
+        for event in events {
+            with_ffi_event(&event, |ffi| {
+                let actual_duration_ns = match (&event, ffi) {
+                    (
+                        kernel::MetricEvent::SnapshotBuildFailure(_),
+                        MetricEvent::SnapshotBuildFailure(e),
+                    ) => {
+                        assert_eq!(e.load_type, SnapshotLoadType::SnapshotHint);
+                        e.duration_ns
+                    }
+                    (
+                        kernel::MetricEvent::LogSegmentLoadFailure(_),
+                        MetricEvent::LogSegmentLoadFailure(e),
+                    ) => e.duration_ns,
+                    (
+                        kernel::MetricEvent::ProtocolMetadataLoadFailure(_),
+                        MetricEvent::ProtocolMetadataLoadFailure(e),
+                    ) => e.duration_ns,
+                    _ => panic!("expected matching snapshot lifecycle failure variant"),
+                };
+                assert_eq!(actual_duration_ns, duration_ns);
+            });
+        }
     }
 
     #[rstest]
