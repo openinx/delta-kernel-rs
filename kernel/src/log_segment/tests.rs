@@ -5121,7 +5121,6 @@ fn assert_log_segment_extended(orig: LogSegment, new: LogSegment) {
     // Check: What should be the same
     fn normalize(log_segment: LogSegment) -> LogSegment {
         use crate::log_segment_files::LogSegmentFiles;
-        use crate::metrics::MetricEvent;
         LogSegment {
             end_version: 0,
             listed: LogSegmentFiles {
@@ -6033,7 +6032,7 @@ fn sidecar_enumeration_reports_outcome(
     #[case] table: &str,
     #[case] format: CheckpointReadFormat,
     #[values(false, true)] cancelled: bool,
-) -> KernelResult<()> {
+) -> Result<()> {
     let (engine, snapshot, _tempdir) = load_test_table(table)?;
     let segment = snapshot.log_segment();
     let checkpoint = &segment.listed.checkpoint_parts[0];
@@ -6118,7 +6117,7 @@ impl ParquetHandler for PartialSidecarParquetHandler {
 }
 
 #[test]
-fn sidecar_enumeration_failure_reports_partial_progress_without_draining() -> KernelResult<()> {
+fn sidecar_enumeration_failure_reports_partial_progress_without_draining() -> Result<()> {
     let (engine, snapshot, _tempdir) = load_test_table("v2-checkpoints-parquet-with-sidecars")?;
     let segment = snapshot.log_segment();
     let checkpoint = &segment.listed.checkpoint_parts[0];
