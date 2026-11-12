@@ -88,9 +88,12 @@ mod streaming_metrics_iterator;
 
 use std::sync::Arc;
 
+pub(crate) use checkpoint_read::CheckpointReadContext;
 pub use checkpoint_read::{
-    CheckpointDiscoveryCompleted, CheckpointDiscoveryMode, CheckpointInspectionCompleted,
-    CheckpointInspectionMode, CheckpointReadFormat, CheckpointReadOutcome,
+    CheckpointDiscoveryCompleted, CheckpointDiscoveryMode, CheckpointHintReadCompleted,
+    CheckpointHintReadOutcome, CheckpointInspectionCompleted, CheckpointInspectionMode,
+    CheckpointReadFormat, CheckpointReadOutcome, CheckpointSidecarReadCompleted,
+    CheckpointSidecarReadMode, CheckpointSidecarReadOutcome,
 };
 pub use events::{
     CommitFailureReason, CrcReadSuccess, DomainMetadataLoadSuccess, JsonReadCompleted,

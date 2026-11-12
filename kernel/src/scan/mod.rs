@@ -1269,13 +1269,17 @@ impl Scan {
         // checkpoint schema returned by the function for consistency.
         let (checkpoint_schema, meta_predicate, physical_stats_read_schema) =
             self.checkpoint_read_options();
-        let result = new_log_segment.read_actions_with_projected_checkpoint_actions(
+        let result = new_log_segment.read_actions_with_checkpoint_context(
             engine,
             COMMIT_READ_SCHEMA.clone(),
             checkpoint_schema,
             meta_predicate,
             physical_stats_read_schema,
             None,
+            &crate::metrics::CheckpointReadContext {
+                correlation_id: self.correlation_id.clone(),
+                ..Default::default()
+            },
         )?;
         // Only the cached suffix needs a kernel-side check. The engine owns cancellation for the
         // newly read action prefix.
@@ -1405,7 +1409,15 @@ impl Scan {
         }
 
         let planner = scan_plan::MetadataPlanner::try_new(self)?;
-        let base = scan_plan::MetadataReplayBase::try_new(&self.snapshot, engine, &planner)?;
+        let base = scan_plan::MetadataReplayBase::try_new(
+            &self.snapshot,
+            engine,
+            &planner,
+            &crate::metrics::CheckpointReadContext {
+                correlation_id: self.correlation_id.clone(),
+                ..Default::default()
+            },
+        )?;
         self.build_metadata_scan_plan_with(base, &planner)
     }
 
@@ -1440,7 +1452,7 @@ impl Scan {
         // derives `add.path IS NOT NULL` and allows readers to skip non-Add row groups.
         self.snapshot
             .log_segment()
-            .read_actions_with_projected_checkpoint_actions(
+            .read_actions_with_checkpoint_context(
                 engine,
                 COMMIT_READ_SCHEMA.clone(),
                 checkpoint_schema,
@@ -1450,6 +1462,10 @@ impl Scan {
                     .physical_partition_schema
                     .as_ref()
                     .map(|s| s.as_ref()),
+                &crate::metrics::CheckpointReadContext {
+                    correlation_id: self.correlation_id.clone(),
+                    ..Default::default()
+                },
             )
     }
 
