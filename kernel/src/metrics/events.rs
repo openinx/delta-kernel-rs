@@ -27,6 +27,8 @@ use uuid::Uuid;
 
 use crate::log_segment::LogSegment;
 
+use super::{CheckpointDiscoveryCompleted, CheckpointInspectionCompleted};
+
 // ====================================================================
 // MetricId
 // ====================================================================
@@ -112,6 +114,8 @@ pub enum MetricEvent {
     StorageListCompleted(StorageListCompleted),
     StorageReadCompleted(StorageReadCompleted),
     StorageCopyCompleted(StorageCopyCompleted),
+    CheckpointDiscoveryCompleted(CheckpointDiscoveryCompleted),
+    CheckpointInspectionCompleted(CheckpointInspectionCompleted),
 }
 
 impl MetricEvent {
@@ -135,7 +139,9 @@ impl MetricEvent {
             | Self::ScanMetadataCompleted(_)
             | Self::StorageListCompleted(_)
             | Self::StorageReadCompleted(_)
-            | Self::StorageCopyCompleted(_) => {}
+            | Self::StorageCopyCompleted(_)
+            | Self::CheckpointDiscoveryCompleted(_)
+            | Self::CheckpointInspectionCompleted(_) => {}
 
             // These failure events carry no duration.
             Self::TransactionCommitFailure(_)
@@ -156,6 +162,8 @@ impl MetricEvent {
             Self::DomainMetadataLoadSuccess(e) => e.record_u64(name, value),
             Self::CrcReadSuccess(e) => e.record_u64(name, value),
 
+            Self::CheckpointDiscoveryCompleted(_) => Err(CheckpointDiscoveryCompleted::SPAN_NAME),
+            Self::CheckpointInspectionCompleted(_) => Err(CheckpointInspectionCompleted::SPAN_NAME),
             Self::LogSegmentLoadSuccess(_) => Err(LogSegmentLoadSuccess::SPAN_NAME),
             Self::ProtocolMetadataLoadSuccess(_) => Err(ProtocolMetadataLoadSuccess::SPAN_NAME),
             Self::SetTransactionLoadSuccess(_) => Err(SetTransactionLoadSuccess::SPAN_NAME),
@@ -185,6 +193,8 @@ impl MetricEvent {
             Self::SetTransactionLoadSuccess(e) => e.record_bool(name, value),
 
             // No bool fields set during span lifetime — a runtime record() on these is a bug.
+            Self::CheckpointDiscoveryCompleted(_) => Err(CheckpointDiscoveryCompleted::SPAN_NAME),
+            Self::CheckpointInspectionCompleted(_) => Err(CheckpointInspectionCompleted::SPAN_NAME),
             Self::LogSegmentLoadSuccess(_) => Err(LogSegmentLoadSuccess::SPAN_NAME),
             Self::ProtocolMetadataLoadSuccess(_) => Err(ProtocolMetadataLoadSuccess::SPAN_NAME),
             Self::SnapshotBuildSuccess(_) => Err(SnapshotBuildSuccess::SPAN_NAME),
@@ -285,7 +295,9 @@ impl MetricEvent {
             | Self::ScanMetadataCompleted(_)
             | Self::StorageListCompleted(_)
             | Self::StorageReadCompleted(_)
-            | Self::StorageCopyCompleted(_)) => e,
+            | Self::StorageCopyCompleted(_)
+            | Self::CheckpointDiscoveryCompleted(_)
+            | Self::CheckpointInspectionCompleted(_)) => e,
         }
     }
 }
@@ -313,6 +325,8 @@ impl fmt::Display for MetricEvent {
             Self::StorageListCompleted(e) => e.fmt(f),
             Self::StorageReadCompleted(e) => e.fmt(f),
             Self::StorageCopyCompleted(e) => e.fmt(f),
+            Self::CheckpointDiscoveryCompleted(e) => e.fmt(f),
+            Self::CheckpointInspectionCompleted(e) => e.fmt(f),
         }
     }
 }
